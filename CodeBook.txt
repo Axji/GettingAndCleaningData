@@ -1,5 +1,8 @@
 CodeBook for Tidy.txt 
- 
+
+Code documentation in the commantaries in the run_analysis.R.
+
+Summary of Tidy.txt
  subjectId     activityId        tBodyAcc-mean()-X
  Min.   : 1.0   Length:180         Min.   :0.2216   
  1st Qu.: 8.0   Class :character   1st Qu.:0.2712   
