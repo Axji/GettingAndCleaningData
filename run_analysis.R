@@ -1,98 +1,90 @@
 # run_analysis.R
-# place files in path or set path with setwd("<yourPathHere>")
+# Bereitet den "UCI HAR Dataset" (Human Activity Recognition Using Smartphones) auf und berechnet den
+# Mittelwert jeder Messgrösse je Person und Aktivität.
+#
+# Aufruf auf der Kommandozeile (schreibt tidy_data.txt):
+#   Rscript run_analysis.R [Pfad/zu/UCI HAR Dataset]
+# Aufruf in R:
+#   source("run_analysis.R"); tidy <- run_analysis()
+#
+# Ohne Pfad wird der Ordner "UCI HAR Dataset" im aktuellen Verzeichnis verwendet und bei Bedarf heruntergeladen.
 
-##PreSet
-#setwd("C:\\Temp\\coursera\\UCI HAR Dataset") #use your own path
-packages <- c("data.table", "reshape2")
-#Control
-sapply(packages, require, character.only = TRUE, quietly = TRUE)
+library(reshape2)
 
+DATA_URL <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
 
-##Load All Files (read.table => DataTables)
+# Ordner mit den Daten bestimmen und die Daten bei Bedarf herunterladen
+find_data_dir <- function(path = NULL) {
+  if (!is.null(path)) {
+    return(path)
+  }
+  dir <- "UCI HAR Dataset"
+  if (!dir.exists(dir)) {
+    zip_file <- tempfile(fileext = ".zip")
+    download.file(DATA_URL, zip_file, mode = "wb")
+    unzip(zip_file, exdir = ".")
+  }
+  dir
+}
 
-dt_Subject_Train <- read.table("train\\subject_train.txt",header=FALSE)
-dt_Subject_Test <- read.table("test\\subject_test.txt",header=FALSE)
+# Liest X (Messwerte), y (Aktivität) und subject (Person) eines Teils ("train" oder "test") und setzt sie nebeneinander
+read_part <- function(dir, part, features) {
+  read <- function(name) {
+    read.table(file.path(dir, part, paste0(name, "_", part, ".txt")), header = FALSE)
+  }
+  x <- read("X")
+  colnames(x) <- features
+  data.frame(subjectId = read("subject")[, 1], activityId = read("y")[, 1], x, check.names = FALSE)
+}
 
-dt_Y_Train <- read.table("train\\Y_train.txt",header=FALSE)
-dt_Y_Test <- read.table("test\\Y_test.txt",header=FALSE)
+# Macht aus den Kürzeln der Originalnamen lesbare Namen (tBodyAcc-mean()-X wird zu timeBodyAccelerometerMeanX).
+# "BodyBody" bleibt wie im Original stehen, sonst gäbe es doppelte Namen (fBodyAccJerkMag und fBodyBodyAccJerkMag).
+clean_names <- function(names) {
+  names <- gsub("-mean\\(\\)", "Mean", names)
+  names <- gsub("-std\\(\\)", "Std", names)
+  names <- gsub("-", "", names)
+  names <- gsub("^t", "time", names)
+  names <- gsub("^f", "frequency", names)
+  names <- gsub("Acc", "Accelerometer", names)
+  names <- gsub("Gyro", "Gyroscope", names)
+  names <- gsub("Mag", "Magnitude", names)
+  names
+}
 
-dt_X_Train <- read.table("train\\X_train.txt",header=FALSE)
-dt_X_Test <- read.table("test\\X_test.txt",header=FALSE)
+run_analysis <- function(path = NULL) {
+  dir <- find_data_dir(path)
 
+  features <- read.table(file.path(dir, "features.txt"), header = FALSE, stringsAsFactors = FALSE)[, 2]
+  activities <- read.table(file.path(dir, "activity_labels.txt"), header = FALSE, stringsAsFactors = FALSE)
+  colnames(activities) <- c("activityId", "activity")
 
-dt_Features <- read.table("features.txt",header=FALSE)
+  # 1. Trainings- und Testdaten zu einem Datensatz zusammenführen
+  all_data <- rbind(read_part(dir, "train", features), read_part(dir, "test", features))
 
+  # 2. Nur Mittelwert (mean()) und Standardabweichung (std()) behalten. meanFreq() und die angle()-Variablen
+  #    gehören nicht dazu.
+  keep <- grepl("-(mean|std)\\(\\)", features)
+  all_data <- all_data[, c(TRUE, TRUE, keep)]
 
-## Name columns
-# Use colnames from loaded DataTables (dt_Features)
-# Or set Names Manually
+  # 3. Aktivitäts-IDs durch Namen ersetzen
+  all_data <- merge(all_data, activities, by = "activityId")
+  all_data$activityId <- NULL
 
-colnames(dt_X_Train)        = dt_Features[,2]; 
-colnames(dt_X_Test)        = dt_Features[,2]; 
+  # 4. Variablennamen lesbar machen
+  measure_cols <- setdiff(colnames(all_data), c("subjectId", "activity"))
+  clean_cols <- clean_names(measure_cols)
+  stopifnot(!anyDuplicated(clean_cols))
+  colnames(all_data)[match(measure_cols, colnames(all_data))] <- clean_cols
 
-colnames(dt_Y_Train)        = "activityId";
-colnames(dt_Y_Test)        = "activityId";
+  # 5. Mittelwert jeder Variable je Person und Aktivität
+  melted <- melt(all_data, id.vars = c("subjectId", "activity"), measure.vars = clean_cols)
+  dcast(melted, subjectId + activity ~ variable, mean)
+}
 
-colnames(dt_Subject_Train)  = "subjectId";
-colnames(dt_Subject_Test)  = "subjectId";
-
-
-
-
-##Merges the training and the test sets to create one data set.
-#ColumnBind (cbind) attaches more columns to a DataTable
-dt_Train = cbind(dt_X_Train, dt_Y_Train, dt_Subject_Train)
-dt_Test = cbind(dt_X_Test, dt_Y_Test, dt_Subject_Test)
-
-#Rowbind (Rbind) same as cbind but for Rows
-dt_All <- rbind(dt_Train, dt_Test)
-
-
-
-
-##Extracts only the measurements on the mean and standard deviation for each measurement. 
-#standardize Names
-dt_Features[,2] = gsub('-mean', 'Mean', dt_Features[,2])
-dt_Features[,2] = gsub('-std', 'Std', dt_Features[,2])
-dt_Features[,2] = gsub('[-()]', '', dt_Features[,2])
-
-#Only Columns with mean and std are Taken (prepare filter)
-columns <- grep(".*Mean.*|.*Std.*", dt_Features[,2])
-
-#Filtering of the Columns
-dt_Features <- dt_Features[columns,] 
-
-# Add the 2 DataColumns (Activity and Subject) with ColumnIDs
-columns <- c(columns, 562, 563)
-dt_All <- dt_All[,columns] 
-
-
-
-
-##Uses descriptive activity names to name the activities in the data set
-#this part isn't used, I've done it manually, see code below. 
-#planned was to use a for that iterates over the 6 values .....
-dt_Activity_labels <- read.table("activity_labels.txt",header=FALSE);
-
-#I tried with a For Loop and dt_Activity_Labels ... but had no success (there are only 6 Values => )
-dt_All$activityId <- gsub(1, "Walking", dt_All$activityId)
-dt_All$activityId <- gsub(2, "WALKING_UPSTAIRS", dt_All$activityId)
-dt_All$activityId <- gsub(3, "WALKING_DOWNSTAIRS", dt_All$activityId)
-dt_All$activityId <- gsub(4, "SITTING", dt_All$activityId)
-dt_All$activityId <- gsub(5, "STANDING", dt_All$activityId)
-dt_All$activityId <- gsub(6, "LAYING", dt_All$activityId)
-
-
-## From the data set in step 4, creates a second, independent tidy data set with the average of each variable for each activity and each subject.
-# IDs as mentioned before
-IDs   = c("subjectId", "activityId")
-# Datalabels (without IDs)
-data_labels = setdiff(colnames(dt_All), IDs)
-# Get columns (Variables)  to (Variables)rows. Each different DataLabel generates a new Row
-melted_data = melt(dt_All, id = IDs, measure.vars = data_labels)
-#  The arguments on the left refer to the ID variables and the arguments on the right refer to the measured variables. Coming up with the right formula can take some trial and error at first. So, if you’re stuck don’t feel bad about just experimenting with formulas. There are usually only so many ways you can write the formula.
-# (Explanation from http://seananderson.ca/2013/10/19/reshape.html (thank you by the way))
-tidy = dcast(melted_data, subjectId + activityId ~ variable, mean)
-
-#Write the Data to a File
-write.table(tidy, file = "tidy_data.txt")
+# Nur ausführen, wenn das Skript mit Rscript gestartet wird (nicht bei source())
+if (sys.nframe() == 0) {
+  args <- commandArgs(trailingOnly = TRUE)
+  tidy <- run_analysis(if (length(args) > 0) args[1] else NULL)
+  write.table(tidy, file = "tidy_data.txt", row.names = FALSE)
+  message("tidy_data.txt geschrieben: ", nrow(tidy), " Zeilen, ", ncol(tidy), " Spalten")
+}

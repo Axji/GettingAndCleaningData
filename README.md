@@ -6,19 +6,31 @@ Abschlussarbeit des Coursera-Kurses "Getting and Cleaning Data". Das Skript `run
 
 ## Verwendung
 
-1. Datensatz herunterladen und entpacken.
-2. In R das Arbeitsverzeichnis auf den Ordner `UCI HAR Dataset` setzen (`setwd(...)`).
-3. Die Pakete `data.table` und `reshape2` installieren.
-4. `source("run_analysis.R")` ausführen. Das Ergebnis liegt in `tidy_data.txt`.
+Voraussetzung: R mit dem Paket `reshape2` (`install.packages("reshape2")`).
+
+```bash
+Rscript run_analysis.R                    # lädt den Datensatz bei Bedarf herunter
+Rscript run_analysis.R "C:/Daten/UCI HAR Dataset"   # oder einen vorhandenen Ordner angeben
+```
+
+Das Ergebnis liegt in `tidy_data.txt`. In R geht es auch so:
+
+```r
+source("run_analysis.R")
+tidy <- run_analysis()
+```
 
 ## Was das Skript tut
 
-1. Trainings- und Testdaten (`X`, `Y`, `subject`) laden und zu einem Datensatz zusammenführen.
-2. Nur die Messgrössen mit Mittelwert (`Mean`) und Standardabweichung (`Std`) behalten.
-3. Die Aktivitäts-IDs 1 bis 6 durch Namen ersetzen (Walking, Walking upstairs, ...).
-4. Variablennamen bereinigen (`-mean()` wird zu `Mean`, Klammern und Bindestriche entfallen).
-5. Pro Person und Aktivität den Mittelwert jeder Variable berechnen und als `tidy_data.txt` speichern (180 Zeilen: 30 Personen mal 6 Aktivitäten).
+1. Trainings- und Testdaten (`X`, `y`, `subject`) laden und zu einem Datensatz zusammenführen
+2. Nur die Messgrössen mit Mittelwert (`mean()`) und Standardabweichung (`std()`) behalten (66 Stück)
+3. Die Aktivitätsnummern 1 bis 6 mit `activity_labels.txt` durch Namen ersetzen
+4. Variablennamen lesbar machen (zum Beispiel `timeBodyAccelerometerMeanX`)
+5. Pro Person und Aktivität den Mittelwert jeder Variable berechnen (180 Zeilen: 30 Personen mal 6 Aktivitäten)
 
-Die Beschreibung der Variablen steht in `CodeBook.txt`.
+Die Beschreibung aller Variablen steht in [CodeBook.md](CodeBook.md).
 
-Hinweis: Die Pfade im Skript sind mit Backslash geschrieben (Windows).
+## Hinweis
+
+Das Skript wurde ohne R-Installation überarbeitet und noch nicht ausgeführt. Bitte einmal laufen lassen und prüfen,
+ob `tidy_data.txt` 180 Zeilen und 68 Spalten hat.
